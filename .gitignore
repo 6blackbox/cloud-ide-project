@@ -1,0 +1,14 @@
+/node_modules
+/web/node_modules
+
+/web/.next/
+/web/out/
+/web/.vercel/
+
+
+/server/temp
+/server/node_modules 
+
+.env
+.env.local
+
