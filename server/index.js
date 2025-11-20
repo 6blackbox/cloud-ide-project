@@ -13,21 +13,18 @@ const proxy = httpProxy.createProxyServer({});
 const activePorts = new Map();
 let portCounter = 3001;
 
-// FIX: Update CORS to allow your Vercel domain
 const io = new Server(server, {
     cors: {
         origin: [
             "http://localhost:3000",
             "https://cloudide-chi.vercel.app",
-            // Add any other Vercel preview URLs if needed
-            /\.vercel\.app$/  // This regex allows all vercel.app subdomains
+            /\.vercel\.app$/  
         ],
         methods: ["GET", "POST"],
         credentials: true
     }
 });
 
-// FIX: Add CORS headers for the preview proxy route too
 app.use((req, res, next) => {
     const allowedOrigins = [
         'http://localhost:3000',
@@ -46,7 +43,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Health check endpoint (useful for Render)
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', connections: activePorts.size });
 });

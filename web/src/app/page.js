@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { Panel, PanelGroup } from "react-resizable-panels";
 
-// --- Dynamic Imports (SSR disabled) ---
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
   loading: () => (
@@ -33,14 +32,12 @@ const Terminal = dynamic(() => import("./components/Terminal"), {
   ),
 });
 
-// --- Custom JS Icon Component ---
 const JsIcon = () => (
   <div className="w-3.5 h-3.5 bg-[#f7df1e] text-black flex items-end justify-end px-[1px] rounded-[1px] font-bold text-[8px] leading-none select-none shrink-0">
     JS
   </div>
 );
 
-// --- Code Editor Component (Separate, not inside dynamic) ---
 function CodeEditor({
   files,
   activeFile,
@@ -133,7 +130,6 @@ function CodeEditor({
   );
 }
 
-// --- MAIN APP COMPONENT ---
 
 const INITIAL_FILES = {
   "index.js": {
@@ -163,7 +159,6 @@ export default function Home() {
   const [settings, setSettings] = useState({ theme: "default", fontSize: 14 });
   const [isCmdOpen, setIsCmdOpen] = useState(false);
 
-  // Layout State
   const [activeTab, setActiveTab] = useState("terminal");
   const [previewUrl, setPreviewUrl] = useState(null);
   const [runId, setRunId] = useState(0);
@@ -236,14 +231,12 @@ export default function Home() {
       [activeFile]: { ...prev[activeFile], value: val },
     }));
 
-  // Prettier formatting - loaded dynamically to avoid build issues
   const formatCode = async () => {
     try {
       const currentCode = files[activeFile]?.value;
       if (!currentCode) return;
       if (!activeFile.endsWith(".js") && !activeFile.endsWith(".json")) return;
 
-      // Dynamic import of prettier to avoid bundling issues
       const prettier = await import("prettier/standalone");
       const parserBabel = await import("prettier/plugins/babel");
       const parserEstree = await import("prettier/plugins/estree");
@@ -379,7 +372,6 @@ export default function Home() {
 
       {/* --- MAIN LAYOUT --- */}
       <div className="flex-1 flex min-h-0">
-        {/* 1. Activity Bar (Leftmost Strip) */}
         <div className="w-12 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-panel)] flex flex-col items-center py-4 gap-4 z-10">
           <button
             onClick={toggleSidebar}
