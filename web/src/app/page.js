@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import CodeEditor from "./components/CodeEditor";
 import FileExplorer from "./components/FileExplorer";
 import CommandPalette from "./components/CommandPalette";
 import ResizeHandle from "./components/ResizeHandle";
@@ -13,6 +12,11 @@ import { Panel, PanelGroup } from "react-resizable-panels";
 import * as prettier from "prettier/standalone";
 import parserBabel from "prettier/plugins/babel";
 import parserEstree from "prettier/plugins/estree";
+
+const CodeEditor = dynamic(() => import("./components/CodeEditor"), {
+  ssr: false,
+  loading: () => <div className="pro-panel flex-1 flex items-center justify-center text-gray-500">Loading Code Editor...</div>
+});
 
 const Terminal = dynamic(() => import("./components/Terminal"), {
   ssr: false,
@@ -35,7 +39,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("terminal"); 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [runId, setRunId] = useState(0); 
-  const [activeActivity, setActiveActivity] = useState("explorer"); // 'explorer', 'search', 'git'
+  const [activeActivity, setActiveActivity] = useState("explorer");
 
   const sidebarRef = useRef(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -48,13 +52,16 @@ export default function Home() {
         const saved = localStorage.getItem("cloud-ide-files");
         if (saved) setFiles(JSON.parse(saved));
     }
-    const newSocket = io("http://localhost:4000");
+    
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000";
+    const newSocket = io(socketUrl);
     
     newSocket.on("connect", () => setIsConnected(true));
     newSocket.on("disconnect", () => setIsConnected(false));
     
     newSocket.on("system-info", (data) => {
-        setPreviewUrl(`http://localhost:4000/preview/${newSocket.id}`);
+        const baseUrl = socketUrl.includes('localhost') ? 'http://localhost:4000' : socketUrl;
+        setPreviewUrl(`${baseUrl}/preview/${newSocket.id}`);
     });
 
     setSocket(newSocket);
@@ -109,7 +116,7 @@ export default function Home() {
   };
 
   return (
-    <main className="h-screen w-screen flex flex-col font-sans overflow-hidden bg-[var(--bg-app)] text-[var(--text-main)] transition-colors duration-500">
+    <main className="h-screen w-screen flex flex-col gap-2 p-3 font-sans overflow-hidden bg-[var(--bg-app)] text-[var(--text-main)] transition-colors duration-500">
       
       <CommandPalette open={isCmdOpen} setOpen={setIsCmdOpen} runCode={runCode} formatCode={formatCode} clearTerminal={() => {}} toggleTheme={toggleTheme} createNewFile={createNewFile} files={files} setActiveFile={setActiveFile} />
 
@@ -136,6 +143,7 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-3">
+            {/* Prettier Button (Visible) */}
             <button onClick={formatCode} className="p-2 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-all" title="Format Code">
                 <Wand2 className="w-4 h-4" />
             </button>
@@ -156,7 +164,7 @@ export default function Home() {
         
         {/* 1. Activity Bar (Leftmost Strip) */}
         <div className="w-12 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-panel)] flex flex-col items-center py-4 gap-4 z-10">
-            <button onClick={() => { setActiveActivity('explorer'); if(isSidebarCollapsed) toggleSidebar(); }} className={`p-2.5 rounded-lg transition-all ${activeActivity === 'explorer' ? "text-[var(--text-main)] bg-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"}`}>
+            <button onClick={() => { setActiveActivity('explorer'); if(sidebarRef.current && sidebarRef.current.getCollapsed()) toggleSidebar(); }} className={`p-2.5 rounded-lg transition-all ${activeActivity === 'explorer' ? "text-[var(--text-main)] bg-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"}`}>
                 <Files className="w-5 h-5" />
             </button>
             <button onClick={() => setActiveActivity('search')} className={`p-2.5 rounded-lg transition-all ${activeActivity === 'search' ? "text-[var(--text-main)] bg-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"}`}>
@@ -182,9 +190,8 @@ export default function Home() {
                 onExpand={() => setIsSidebarCollapsed(false)}
                 className={`flex flex-col border-r border-[var(--border-color)] bg-[var(--bg-app)] ${isLayoutTransitioning ? "transition-all duration-300" : ""}`}
             >
-                <div className="h-full overflow-hidden">
-                    <FileExplorer files={files} activeFile={activeFile} onSelectFile={setActiveFile} onAddFile={handleAddFile} onDeleteFile={handleDeleteFile} />
-                </div>
+                {/* File Explorer is the content */}
+                <FileExplorer files={files} activeFile={activeFile} onSelectFile={setActiveFile} onAddFile={handleAddFile} onDeleteFile={handleDeleteFile} />
             </Panel>
 
             {!isSidebarCollapsed && <ResizeHandle />}
