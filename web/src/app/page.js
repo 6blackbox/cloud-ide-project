@@ -2,23 +2,104 @@
 
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import CodeEditor from "./components/CodeEditor"; 
 import FileExplorer from "./components/FileExplorer";
 import CommandPalette from "./components/CommandPalette";
 import ResizeHandle from "./components/ResizeHandle";
 import BrowserPreview from "./components/BrowserPreview"; 
 import { io } from "socket.io-client";
-import { Play, Sun, Moon, Code2, PanelLeft, Command as CmdIcon, Wand2, TerminalSquare, Globe, Files, Search, GitGraph, Settings, LayoutTemplate, Wifi, CheckCircle2, AlertCircle } from "lucide-react"; 
+import { Play, Sun, Moon, Code2, PanelLeft, Command as CmdIcon, Wand2, TerminalSquare, Globe, Files, Search, GitGraph, Settings, LayoutTemplate, Wifi, CheckCircle2, AlertCircle, X } from "lucide-react"; 
 import { Panel, PanelGroup } from "react-resizable-panels";
 import * as prettier from "prettier/standalone";
 import parserBabel from "prettier/plugins/babel";
 import parserEstree from "prettier/plugins/estree";
 
+// --- Custom JS Icon Component (Must be static) ---
+const JsIcon = () => (
+  <div className="w-3.5 h-3.5 bg-[#f7df1e] text-black flex items-end justify-end px-[1px] rounded-[1px] font-bold text-[8px] leading-none select-none shrink-0">
+    JS
+  </div>
+);
 
+// A. Code Editor Component (Contains core Monaco logic - Aggressively Dynamic)
+const CodeEditor = dynamic( // <-- CORRECT NAME: CodeEditor
+    async () => {
+        // Load the core library inside the dynamic block to ensure it's client-side
+        const Editor = (await import('@monaco-editor/react')).default;
+
+        // Return the full component logic that renders the editor and tab system
+        return function FinalCodeEditor({ 
+            files, activeFile, setActiveFile, onCloseFile, setCode, onSave, fontSize = 14, theme = 'vs-dark' 
+        }) {
+            const activeFileObj = files[activeFile];
+            
+            const handleEditorDidMount = (editor, monaco) => {
+                editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                    if (onSave) onSave();
+                });
+            };
+
+            return (
+                <div className="h-full w-full pro-panel rounded-xl overflow-hidden flex flex-col transition-all duration-500 group border border-[var(--border-color)] hover:border-[var(--accent)]/30">
+                    {/* Multi-Tab Header */}
+                    <div className="h-9 border-b border-[var(--border-color)] flex items-end px-2 gap-1 overflow-x-auto no-scrollbar z-20">
+                        {Object.keys(files).map((fileName) => (
+                            <div 
+                                key={fileName}
+                                onClick={() => setActiveFile(fileName)}
+                                className={`relative group/tab px-3 py-2 min-w-[100px] max-w-[180px] border-t border-l border-r rounded-t-md flex items-center gap-2 text-xs cursor-pointer select-none transition-all ${
+                                    activeFile === fileName 
+                                        ? "bg-[var(--bg-panel)] border-[var(--border-color)] text-[var(--text-main)] z-10" 
+                                        : "bg-transparent border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-panel)]/50 hover:text-[var(--text-main)]"
+                                }`}
+                            >
+                                {activeFile === fileName && (<div className="absolute top-0 left-0 w-full h-[2px] bg-[var(--accent)] rounded-t-md"></div>)}
+                                <JsIcon />
+                                <span className="truncate flex-1">{fileName}</span>
+                                {fileName !== 'index.js' && (
+                                    <button onClick={(e) => { e.stopPropagation(); onCloseFile(fileName); }} className={`p-0.5 rounded-md transition-all opacity-0 group-hover/tab:opacity-100 ${activeFile === fileName ? "hover:bg-[var(--text-main)]/10 text-[var(--text-muted)] hover:text-[var(--text-main)]" : "hover:bg-red-500/20 text-[var(--text-muted)] hover:text-red-500"}`} title="Close File">
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    {/* Editor Area */}
+                    <div className="flex-1 bg-[var(--bg-panel)] relative z-10"> 
+                        {activeFileObj ? (
+                            <Editor
+                                height="100%"
+                                defaultLanguage="javascript"
+                                theme={theme}
+                                path={activeFile}
+                                value={activeFileObj.value}
+                                onChange={(value) => setCode(value)}
+                                onMount={handleEditorDidMount}
+                                options={{
+                                    fontSize: fontSize, minimap: { enabled: false }, scrollBeyondLastLine: false, automaticLayout: true,
+                                    padding: { top: 24, bottom: 24 }, fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontLigatures: true,
+                                    lineNumbers: "on", renderLineHighlight: "all", cursorBlinking: "smooth", smoothScrolling: true, contextmenu: true,
+                                }}
+                            />
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm">No file selected</div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+    }, 
+    { ssr: false, loading: () => <div className="pro-panel flex-1 flex items-center justify-center text-gray-500">Loading Code Editor...</div> }
+);
+
+
+// B. Dynamic Terminal
 const Terminal = dynamic(() => import("./components/Terminal"), {
   ssr: false,
   loading: () => <div className="h-full w-full flex items-center justify-center text-gray-500 font-mono text-sm animate-pulse">Initializing Terminal...</div>,
 });
+
+
+// --- MAIN APP COMPONENT ---
 
 const INITIAL_FILES = {
   "index.js": { name: "index.js", language: "javascript", value: `const http = require('http');\n\nconst server = http.createServer((req, res) => {\n  res.writeHead(200, { 'Content-Type': 'text/plain' });\n  res.end('Hello from your Cloud Server!');\n});\n\n// IMPORTANT: Use process.env.PORT\nconst PORT = process.env.PORT || 3000;\n\nserver.listen(PORT, () => {\n  console.log(\`Server running on port \${PORT}\`);\n});` }
@@ -36,7 +117,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("terminal"); 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [runId, setRunId] = useState(0); 
-  const [activeActivity, setActiveActivity] = useState("explorer");
 
   const sidebarRef = useRef(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -122,8 +202,8 @@ export default function Home() {
         <div className="flex items-center gap-4">
             {/* Logo */}
             <div className="flex items-center gap-2.5 group cursor-pointer">
-                <div className="relative w-7 h-7 flex items-center justify-center bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/40 transition-all">
-                    <Code2 className="w-4 h-4 text-white" />
+                <div className="relative w-7 h-7 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/40 transition-all">
+                    <Code2 className="w-4 h-4 text-white absolute inset-0 m-auto" />
                     <div className="absolute inset-0 rounded-lg ring-1 ring-white/20 group-hover:ring-white/40 transition-all"></div>
                 </div>
                 <h1 className="font-bold text-sm tracking-wide text-[var(--text-main)] group-hover:text-[var(--accent)] transition-colors">
@@ -161,13 +241,14 @@ export default function Home() {
         
         {/* 1. Activity Bar (Leftmost Strip) */}
         <div className="w-12 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-panel)] flex flex-col items-center py-4 gap-4 z-10">
-            <button onClick={() => { setActiveActivity('explorer'); if(sidebarRef.current && sidebarRef.current.getCollapsed()) toggleSidebar(); }} className={`p-2.5 rounded-lg transition-all ${activeActivity === 'explorer' ? "text-[var(--text-main)] bg-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"}`}>
+            {/* Simplified button logic: always use the default for now */}
+            <button onClick={toggleSidebar} className={`p-2.5 rounded-lg transition-all text-[var(--text-main)] bg-[var(--border-color)]`}>
                 <Files className="w-5 h-5" />
             </button>
-            <button onClick={() => setActiveActivity('search')} className={`p-2.5 rounded-lg transition-all ${activeActivity === 'search' ? "text-[var(--text-main)] bg-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"}`}>
+            <button className={`p-2.5 rounded-lg transition-all text-[var(--text-muted)] hover:text-[var(--text-main)]`}>
                 <Search className="w-5 h-5" />
             </button>
-            <button onClick={() => setActiveActivity('git')} className={`p-2.5 rounded-lg transition-all ${activeActivity === 'git' ? "text-[var(--text-main)] bg-[var(--border-color)]" : "text-[var(--text-muted)] hover:text-[var(--text-main)]"}`}>
+            <button className={`p-2.5 rounded-lg transition-all text-[var(--text-muted)] hover:text-[var(--text-main)]`}>
                 <GitGraph className="w-5 h-5" />
             </button>
             <div className="flex-1"></div>
@@ -197,7 +278,7 @@ export default function Home() {
             <Panel>
                 <PanelGroup direction="horizontal" autoSaveId="layout-inner">
                     <Panel defaultSize={60} minSize={30} className="flex flex-col relative">
-                        <CodeEditor 
+                        <CodeEditor
                             files={files}
                             activeFile={activeFile} 
                             setActiveFile={setActiveFile}
@@ -249,7 +330,6 @@ export default function Home() {
                 <span>{isConnected ? "Connected to Remote" : "Reconnecting..."}</span>
             </div>
             <div className="flex items-center gap-1.5">
-                <LayoutTemplate className="w-3 h-3" />
                 <span>master*</span>
             </div>
             <div className="flex items-center gap-1.5">
