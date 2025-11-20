@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
+import CodeEditor from "./components/CodeEditor"; 
 import FileExplorer from "./components/FileExplorer";
 import CommandPalette from "./components/CommandPalette";
 import ResizeHandle from "./components/ResizeHandle";
@@ -13,10 +14,6 @@ import * as prettier from "prettier/standalone";
 import parserBabel from "prettier/plugins/babel";
 import parserEstree from "prettier/plugins/estree";
 
-const CodeEditor = dynamic(() => import("./components/CodeEditor"), {
-  ssr: false,
-  loading: () => <div className="pro-panel flex-1 flex items-center justify-center text-gray-500">Loading Code Editor...</div>
-});
 
 const Terminal = dynamic(() => import("./components/Terminal"), {
   ssr: false,
